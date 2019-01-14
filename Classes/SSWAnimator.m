@@ -48,10 +48,17 @@ UIViewAnimationOptions const SSWNavigationTransitionCurve = 7 << 16;
 {
     UIViewController *toViewController = [transitionContext viewControllerForKey:UITransitionContextToViewControllerKey];
     UIViewController *fromViewController = [transitionContext viewControllerForKey:UITransitionContextFromViewControllerKey];
+    UINavigationController *navigationController = fromViewController.navigationController;
+    UINavigationBar *navigationBar = navigationController.navigationBar;
+    BOOL toNavigationBarHidden = toViewController.navigationController.navigationBarHidden;
     [[transitionContext containerView] insertSubview:toViewController.view belowSubview:fromViewController.view];
 
     // parallax effect; the offset matches the one used in the pop animation in iOS 7.1
     CGFloat toViewControllerXTranslation = - CGRectGetWidth([transitionContext containerView].bounds) * 0.3f;
+    if (toNavigationBarHidden) {
+        toViewController.view.bounds = [transitionContext containerView].bounds;
+        toViewController.view.center = [transitionContext containerView].center;
+    }
     toViewController.view.transform = CGAffineTransformMakeTranslation(toViewControllerXTranslation, 0);
 
     // add a shadow on the left side of the frontmost view controller
@@ -77,11 +84,11 @@ UIViewAnimationOptions const SSWNavigationTransitionCurve = 7 << 16;
     BOOL shouldAnimateTabBar = [self.delegate animatorShouldAnimateTabBar:self];
     if (shouldAnimateTabBar && tabBar && (tabBarControllerContainsToViewController || (isToViewControllerFirstInNavController && tabBarControllerContainsNavController))) {
         [tabBar.layer removeAllAnimations];
-        
+
         CGRect tabBarRect = tabBar.frame;
         tabBarRect.origin.x = toViewController.view.bounds.origin.x;
         tabBar.frame = tabBarRect;
-        
+
         [toViewController.view addSubview:tabBar];
         shouldAddTabBarBackToTabBarController = YES;
     }
@@ -89,15 +96,22 @@ UIViewAnimationOptions const SSWNavigationTransitionCurve = 7 << 16;
     // Uses linear curve for an interactive transition, so the view follows the finger. Otherwise, uses a navigation transition curve.
     UIViewAnimationOptions curveOption = [transitionContext isInteractive] ? UIViewAnimationOptionCurveLinear : SSWNavigationTransitionCurve;
 
+    if (toNavigationBarHidden) {
+        navigationBar.alpha = 1;
+    }
+
     [UIView animateWithDuration:[self transitionDuration:transitionContext] delay:0 options:UIViewAnimationOptionTransitionNone | curveOption animations:^{
         toViewController.view.transform = CGAffineTransformIdentity;
         fromViewController.view.transform = CGAffineTransformMakeTranslation(toViewController.view.frame.size.width, 0);
         dimmingView.alpha = 0.0f;
 
+        if (toNavigationBarHidden) {
+            navigationBar.transform = CGAffineTransformMakeTranslation(toViewController.view.frame.size.width, 0);
+        }
     } completion:^(BOOL finished) {
         if (shouldAddTabBarBackToTabBarController) {
             [tabBarController.view addSubview:tabBar];
-            
+
             CGRect tabBarRect = tabBar.frame;
             tabBarRect.origin.x = tabBarController.view.bounds.origin.x;
             tabBar.frame = tabBarRect;
@@ -106,6 +120,8 @@ UIViewAnimationOptions const SSWNavigationTransitionCurve = 7 << 16;
         [dimmingView removeFromSuperview];
         fromViewController.view.transform = CGAffineTransformIdentity;
         fromViewController.view.clipsToBounds = previousClipsToBounds;
+        navigationBar.transform = CGAffineTransformIdentity;
+
         [transitionContext completeTransition:![transitionContext transitionWasCancelled]];
     }];
 
