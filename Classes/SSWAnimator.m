@@ -8,31 +8,9 @@
 
 UIViewAnimationOptions const SSWNavigationTransitionCurve = 7 << 16;
 
-
-@implementation UIView (TransitionShadow)
-- (void)addLeftSideShadowWithFading
-{
-    CGFloat shadowWidth = 4.0f;
-    CGFloat shadowVerticalPadding = -20.0f; // negative padding, so the shadow isn't rounded near the top and the bottom
-    CGFloat shadowHeight = CGRectGetHeight(self.frame) - 2 * shadowVerticalPadding;
-    CGRect shadowRect = CGRectMake(-shadowWidth, shadowVerticalPadding, shadowWidth, shadowHeight);
-    UIBezierPath *shadowPath = [UIBezierPath bezierPathWithRect:shadowRect];
-    self.layer.shadowPath = [shadowPath CGPath];
-    self.layer.shadowOpacity = 0.2f;
-
-    // fade shadow during transition
-    CGFloat toValue = 0.0f;
-    CABasicAnimation *animation = [CABasicAnimation animationWithKeyPath:@"shadowOpacity"];
-    animation.fromValue = @(self.layer.shadowOpacity);
-    animation.toValue = @(toValue);
-    [self.layer addAnimation:animation forKey:nil];
-    self.layer.shadowOpacity = toValue;
-}
-@end
-
-
 @interface SSWAnimator()
 @property (weak, nonatomic) UIViewController *toViewController;
+@property (strong, nonatomic) UIView *shadowView;
 @end
 
 @implementation SSWAnimator
@@ -58,11 +36,33 @@ UIViewAnimationOptions const SSWNavigationTransitionCurve = 7 << 16;
     if (toNavigationBarHidden) {
         toViewController.view.bounds = [transitionContext containerView].bounds;
         toViewController.view.center = [transitionContext containerView].center;
+    } else {
+        CGRect toFrame = toViewController.view.frame;
+        toFrame.origin.y = CGRectGetMaxY(navigationBar.frame);
+        toViewController.view.frame = toFrame;
     }
+
     toViewController.view.transform = CGAffineTransformMakeTranslation(toViewControllerXTranslation, 0);
 
     // add a shadow on the left side of the frontmost view controller
-    [fromViewController.view addLeftSideShadowWithFading];
+    CGFloat shadowWidth = 4.0f;
+    CGFloat navbarHeight = CGRectGetMaxY(navigationBar.frame);
+    CGFloat shadowHeight = fromViewController.view.bounds.size.height + navbarHeight;
+
+    UIView *shadowView = [UIView new];
+    [fromViewController.view insertSubview:shadowView atIndex:0];
+    shadowView.frame = CGRectMake(-shadowWidth*10, -navbarHeight, shadowWidth*10, shadowHeight);
+    shadowView.clipsToBounds = YES;
+
+    CGRect shadowRect = CGRectMake(shadowWidth*10 -shadowWidth/2, 0, shadowWidth*2, shadowHeight);
+    UIBezierPath *shadowPath = [UIBezierPath bezierPathWithRect:shadowRect];
+    shadowView.layer.shadowPath = [shadowPath CGPath];
+    shadowView.layer.shadowOpacity = 0.25f;
+    shadowView.layer.shadowRadius = 3.f;
+    shadowView.layer.shadowOffset = CGSizeMake(-2.f, 0);
+
+    self.shadowView = shadowView;
+
     BOOL previousClipsToBounds = fromViewController.view.clipsToBounds;
     fromViewController.view.clipsToBounds = NO;
 
@@ -108,6 +108,8 @@ UIViewAnimationOptions const SSWNavigationTransitionCurve = 7 << 16;
         if (toNavigationBarHidden) {
             navigationBar.transform = CGAffineTransformMakeTranslation(toViewController.view.frame.size.width, 0);
         }
+
+        shadowView.alpha = 0;
     } completion:^(BOOL finished) {
         if (shouldAddTabBarBackToTabBarController) {
             [tabBarController.view addSubview:tabBar];
@@ -122,6 +124,8 @@ UIViewAnimationOptions const SSWNavigationTransitionCurve = 7 << 16;
         fromViewController.view.clipsToBounds = previousClipsToBounds;
         navigationBar.transform = CGAffineTransformIdentity;
 
+        [shadowView removeFromSuperview];
+
         [transitionContext completeTransition:![transitionContext transitionWasCancelled]];
     }];
 
@@ -133,6 +137,7 @@ UIViewAnimationOptions const SSWNavigationTransitionCurve = 7 << 16;
     // restore the toViewController's transform if the animation was cancelled
     if (!transitionCompleted) {
         self.toViewController.view.transform = CGAffineTransformIdentity;
+        [self.shadowView removeFromSuperview];
     }
 }
 
