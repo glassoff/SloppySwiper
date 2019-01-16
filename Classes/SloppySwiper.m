@@ -104,7 +104,10 @@
     } else if (recognizer.state == UIGestureRecognizerStateChanged) {
         CGPoint translation = [recognizer translationInView:view];
         // Cumulative translation.x can be less than zero because user can pan slightly to the right and then back to the left.
-        CGFloat d = fabs(translation.x / CGRectGetWidth(view.bounds));
+        CGFloat d = translation.x / CGRectGetWidth(view.bounds);
+        if (self.isRTL) {
+            d *= -1;
+        }
         [self.interactionController updateInteractiveTransition:d];
     } else if (recognizer.state == UIGestureRecognizerStateEnded || recognizer.state == UIGestureRecognizerStateCancelled) {
         if (self.isRTL ? [recognizer velocityInView:view].x < 0 : [recognizer velocityInView:view].x > 0) {
