@@ -16,6 +16,7 @@
 /// A Boolean value that indicates whether the navigation controller is currently animating a push/pop operation.
 @property (nonatomic) BOOL duringAnimation;
 @property (nonatomic) BOOL isRTL;
+@property (strong, nonatomic) NSMutableSet<UIGestureRecognizer *> *otherRecognizers;
 @end
 
 @implementation SloppySwiper
@@ -50,6 +51,8 @@
 - (void)commonInit
 {
     self.isRTL = UIApplication.sharedApplication.userInterfaceLayoutDirection == UIUserInterfaceLayoutDirectionRightToLeft;
+
+    self.otherRecognizers = [NSMutableSet set];
 
     SSWDirectionalPanGestureRecognizer *panRecognizer = [[SSWDirectionalPanGestureRecognizer alloc] initWithTarget:self action:@selector(pan:)];
     panRecognizer.direction = self.isRTL ? SSWPanDirectionLeft : SSWPanDirectionRight;
@@ -92,6 +95,12 @@
 
             [self.navigationController popViewControllerAnimated:YES];
         }
+        for (UIGestureRecognizer *anotherRecognizer in self.otherRecognizers) {
+            if (anotherRecognizer != recognizer && anotherRecognizer.enabled == YES) {
+                anotherRecognizer.enabled = NO;
+                anotherRecognizer.enabled = YES;
+            }
+        }
     } else if (recognizer.state == UIGestureRecognizerStateChanged) {
         CGPoint translation = [recognizer translationInView:view];
         // Cumulative translation.x can be less than zero because user can pan slightly to the right and then back to the left.
@@ -113,9 +122,22 @@
 
 -(BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer {
     if (self.navigationController.viewControllers.count > 1) {
+        self.otherRecognizers = [NSMutableSet set];
         return YES;
     }
     return NO;
+}
+
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)otherGestureRecognizer {
+    if ([otherGestureRecognizer isKindOfClass:[UIPanGestureRecognizer class]]) {
+        CGPoint velocity = [((UIPanGestureRecognizer *)otherGestureRecognizer) velocityInView:otherGestureRecognizer.view];
+        if (fabs(velocity.x) > fabs(velocity.y)) {
+            return NO;
+        }
+    }
+    [self.otherRecognizers addObject:otherGestureRecognizer];
+
+    return YES;
 }
 
 #pragma mark - UINavigationControllerDelegate
