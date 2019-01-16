@@ -24,6 +24,9 @@ UIViewAnimationOptions const SSWNavigationTransitionCurve = 7 << 16;
 // Tries to animate a pop transition similarly to the default iOS' pop transition.
 - (void)animateTransition:(id<UIViewControllerContextTransitioning>)transitionContext
 {
+    BOOL isRTL = UIApplication.sharedApplication.userInterfaceLayoutDirection == UIUserInterfaceLayoutDirectionRightToLeft;
+    CGFloat directionFactor = isRTL ? -1 : 1;
+
     UIViewController *toViewController = [transitionContext viewControllerForKey:UITransitionContextToViewControllerKey];
     UIViewController *fromViewController = [transitionContext viewControllerForKey:UITransitionContextFromViewControllerKey];
     UINavigationController *navigationController = fromViewController.navigationController;
@@ -42,7 +45,7 @@ UIViewAnimationOptions const SSWNavigationTransitionCurve = 7 << 16;
         toViewController.view.frame = toFrame;
     }
 
-    toViewController.view.transform = CGAffineTransformMakeTranslation(toViewControllerXTranslation, 0);
+    toViewController.view.transform = CGAffineTransformMakeTranslation(toViewControllerXTranslation * directionFactor, 0);
 
     // add a shadow on the left side of the frontmost view controller
     CGFloat shadowWidth = 4.0f;
@@ -51,15 +54,20 @@ UIViewAnimationOptions const SSWNavigationTransitionCurve = 7 << 16;
 
     UIView *shadowView = [UIView new];
     [fromViewController.view insertSubview:shadowView atIndex:0];
-    shadowView.frame = CGRectMake(-shadowWidth*10, -navbarHeight, shadowWidth*10, shadowHeight);
+    shadowView.frame = CGRectMake(isRTL ? CGRectGetWidth(fromViewController.view.frame) : -shadowWidth*10,
+                                  -navbarHeight,
+                                  shadowWidth*10,
+                                  shadowHeight);
     shadowView.clipsToBounds = YES;
 
-    CGRect shadowRect = CGRectMake(shadowWidth*10 -shadowWidth/2, 0, shadowWidth*2, shadowHeight);
+    CGRect shadowRect = CGRectMake(isRTL ? -shadowWidth : shadowWidth*10 - shadowWidth,
+                                   0,
+                                   shadowWidth*2,
+                                   shadowHeight);
     UIBezierPath *shadowPath = [UIBezierPath bezierPathWithRect:shadowRect];
     shadowView.layer.shadowPath = [shadowPath CGPath];
     shadowView.layer.shadowOpacity = 0.25f;
     shadowView.layer.shadowRadius = 3.f;
-    shadowView.layer.shadowOffset = CGSizeMake(-2.f, 0);
 
     self.shadowView = shadowView;
 
@@ -102,11 +110,11 @@ UIViewAnimationOptions const SSWNavigationTransitionCurve = 7 << 16;
 
     [UIView animateWithDuration:[self transitionDuration:transitionContext] delay:0 options:UIViewAnimationOptionTransitionNone | curveOption animations:^{
         toViewController.view.transform = CGAffineTransformIdentity;
-        fromViewController.view.transform = CGAffineTransformMakeTranslation(toViewController.view.frame.size.width, 0);
+        fromViewController.view.transform = CGAffineTransformMakeTranslation(toViewController.view.frame.size.width * directionFactor, 0);
         dimmingView.alpha = 0.0f;
 
         if (toNavigationBarHidden) {
-            navigationBar.transform = CGAffineTransformMakeTranslation(toViewController.view.frame.size.width, 0);
+            navigationBar.transform = CGAffineTransformMakeTranslation(toViewController.view.frame.size.width * directionFactor, 0);
         }
 
         shadowView.alpha = 0;
