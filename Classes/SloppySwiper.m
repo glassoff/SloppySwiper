@@ -15,6 +15,8 @@
 @property (strong, nonatomic) UIPercentDrivenInteractiveTransition *interactionController;
 /// A Boolean value that indicates whether the navigation controller is currently animating a push/pop operation.
 @property (nonatomic) BOOL duringAnimation;
+@property (nonatomic) BOOL isRTL;
+@property (strong, nonatomic) NSMutableSet<UIGestureRecognizer *> *otherRecognizers;
 @end
 
 @implementation SloppySwiper
@@ -48,8 +50,12 @@
 
 - (void)commonInit
 {
+    self.isRTL = UIApplication.sharedApplication.userInterfaceLayoutDirection == UIUserInterfaceLayoutDirectionRightToLeft;
+
+    self.otherRecognizers = [NSMutableSet set];
+
     SSWDirectionalPanGestureRecognizer *panRecognizer = [[SSWDirectionalPanGestureRecognizer alloc] initWithTarget:self action:@selector(pan:)];
-    panRecognizer.direction = SSWPanDirectionRight;
+    panRecognizer.direction = self.isRTL ? SSWPanDirectionLeft : SSWPanDirectionRight;
     panRecognizer.maximumNumberOfTouches = 1;
     panRecognizer.delegate = self;
     [_navigationController.view addGestureRecognizer:panRecognizer];
@@ -89,13 +95,22 @@
 
             [self.navigationController popViewControllerAnimated:YES];
         }
+        for (UIGestureRecognizer *anotherRecognizer in self.otherRecognizers) {
+            if (anotherRecognizer != recognizer && anotherRecognizer.enabled == YES) {
+                anotherRecognizer.enabled = NO;
+                anotherRecognizer.enabled = YES;
+            }
+        }
     } else if (recognizer.state == UIGestureRecognizerStateChanged) {
         CGPoint translation = [recognizer translationInView:view];
         // Cumulative translation.x can be less than zero because user can pan slightly to the right and then back to the left.
-        CGFloat d = translation.x > 0 ? translation.x / CGRectGetWidth(view.bounds) : 0;
+        CGFloat d = translation.x / CGRectGetWidth(view.bounds);
+        if (self.isRTL) {
+            d *= -1;
+        }
         [self.interactionController updateInteractiveTransition:d];
     } else if (recognizer.state == UIGestureRecognizerStateEnded || recognizer.state == UIGestureRecognizerStateCancelled) {
-        if ([recognizer velocityInView:view].x > 0) {
+        if (self.isRTL ? [recognizer velocityInView:view].x < 0 : [recognizer velocityInView:view].x > 0) {
             [self.interactionController finishInteractiveTransition];
         } else {
             [self.interactionController cancelInteractiveTransition];
@@ -110,9 +125,22 @@
 
 -(BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer {
     if (self.navigationController.viewControllers.count > 1) {
+        self.otherRecognizers = [NSMutableSet set];
         return YES;
     }
     return NO;
+}
+
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)otherGestureRecognizer {
+    if ([otherGestureRecognizer isKindOfClass:[UIPanGestureRecognizer class]]) {
+        CGPoint velocity = [((UIPanGestureRecognizer *)otherGestureRecognizer) velocityInView:otherGestureRecognizer.view];
+        if (fabs(velocity.x) > fabs(velocity.y)) {
+            return NO;
+        }
+    }
+    [self.otherRecognizers addObject:otherGestureRecognizer];
+
+    return YES;
 }
 
 #pragma mark - UINavigationControllerDelegate
@@ -140,7 +168,7 @@
 - (void)navigationController:(UINavigationController *)navigationController didShowViewController:(UIViewController *)viewController animated:(BOOL)animated
 {
     self.duringAnimation = NO;
-    
+
     if (navigationController.viewControllers.count <= 1) {
         self.panRecognizer.enabled = NO;
     }
